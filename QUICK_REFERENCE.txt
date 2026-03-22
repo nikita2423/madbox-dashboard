@@ -1,0 +1,96 @@
+┌─────────────────────────────────────────────────────────────────────┐
+│                   TOPIC IDENTIFICATION API                          │
+│                      Quick Reference Card                           │
+└─────────────────────────────────────────────────────────────────────┘
+
+📍 ENDPOINT
+   POST /api/bank-post/topic-from-query
+
+🔗 ARCHITECTURE
+   Frontend → Next.js Proxy → Backend API (port 3002) → AI Service
+
+📦 REQUEST
+   {
+     "query": "從新聞、社交媒體包括小紅書及討論區收集與「財富管理」相關的客戶心聲..."
+   }
+
+✅ RESPONSE (200 OK)
+   {
+     "topic": "brand_overall",
+     "products": ["財富管理", "投資", "保險"],
+     "product_class": "投資",
+     "channel_types": "",
+     "customer_segments": "",
+     "entity_keywords": ["Wealth management", "財富管理", ...]
+   }
+
+❌ ERROR RESPONSES
+   400 - Bad Request (missing/invalid query)
+   503 - Backend API unavailable
+   500 - Internal server error
+
+📁 FILES CREATED
+   ✓ /app/api/bank-post/topic-from-query/route.ts  (Proxy endpoint)
+   ✓ /app/api/bank-post/types.ts                    (Type definitions)
+   ✓ /app/api/bank-post/README.md                   (Documentation)
+   ✓ /lib/api-client.ts                             (Client utility)
+   ✓ /examples/api-integration-example.tsx          (Integration examples)
+   ✓ /test-api.js                                   (Test script)
+
+🚀 QUICK START
+
+   1. Start backend API (port 3002):
+      (Your NestJS backend should be running)
+
+   2. Start Next.js dev server:
+      npm run dev
+
+   3. Test the endpoint:
+      node test-api.js
+
+💻 USAGE IN COMPONENTS
+
+   import { identifyTopicsFromQuery } from '@/lib/api-client';
+
+   const result = await identifyTopicsFromQuery(searchQuery);
+   console.log(result.topic);        // "brand_overall"
+   console.log(result.products);     // ["財富管理", "投資", "保險"]
+   console.log(result.entity_keywords); // ["Wealth management", ...]
+
+🧪 TESTING
+
+   # Node.js test script
+   node test-api.js
+
+   # curl
+   curl -X POST http://localhost:3000/api/bank-post/topic-from-query \
+     -H "Content-Type: application/json" \
+     -d '{"query":"財富管理相關查詢"}'
+
+   # Python
+   import requests
+   response = requests.post(
+     'http://localhost:3000/api/bank-post/topic-from-query',
+     json={'query': '財富管理相關查詢'}
+   )
+
+📚 DOCUMENTATION
+   See /app/api/bank-post/README.md for full documentation
+
+🔍 DEBUGGING
+   - Check Next.js console for request/response logs
+   - Ensure backend is running on http://localhost:3002
+   - Verify query parameter is a non-empty string
+
+⚡ INTEGRATION EXAMPLE
+   See /examples/api-integration-example.tsx for:
+   - Basic usage
+   - React hooks
+   - Error handling
+   - Component integration
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  Status: ✅ READY TO USE                                            │
+│  Backend Required: YES (http://localhost:3002)                      │
+│  Frontend Port: http://localhost:3000                               │
+└─────────────────────────────────────────────────────────────────────┘
