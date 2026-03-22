@@ -39,14 +39,17 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { formatDateRange, formatDateRangeEnGB } from "./utils";
 import rawData from "@/components/dashboard/data.json";
-import {
-  extractUniqueBrands,
-  extractUniqueMediums,
-  filterData,
-} from "@/lib/data-loader";
+import { extractUniqueMediums, filterData } from "@/lib/data-loader";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
+type Brand = "ALL" | "壽司郎" | "元氣壽司";
 type Region = "ALL" | "OTHER" | "HK" | "CN" | "TW" | "MO" | "SG" | "MY";
+
+interface BrandOption {
+  id: Brand;
+  label: string;
+  shortLabel: string;
+}
 
 interface RegionOption {
   id: Region;
@@ -54,51 +57,11 @@ interface RegionOption {
   shortLabel: string;
 }
 
-const CHANNEL_OPTIONS: ChannelOption[] = [
-  {
-    id: "social",
-    label: "Social Media",
-    description: "Facebook, Instagram, Twitter / X",
-    icon: <Globe className="h-5 w-5" />,
-    color: "text-blue-600",
-    bgColor: "bg-blue-50",
-    borderColor: "border-blue-200",
-  },
-  {
-    id: "forum",
-    label: "Forum",
-    description: "Discussion boards & community posts",
-    icon: <MessageSquare className="h-5 w-5" />,
-    color: "text-purple-600",
-    bgColor: "bg-purple-50",
-    borderColor: "border-purple-200",
-  },
-  {
-    id: "xsh",
-    label: "小紅書 / XHS",
-    description: "Xiaohongshu (RED) content",
-    icon: <Hash className="h-5 w-5" />,
-    color: "text-rose-600",
-    bgColor: "bg-rose-50",
-    borderColor: "border-rose-200",
-  },
-  {
-    id: "news",
-    label: "News",
-    description: "Online news articles & press",
-    icon: <Newspaper className="h-5 w-5" />,
-    color: "text-amber-600",
-    bgColor: "bg-amber-50",
-    borderColor: "border-amber-200",
-  },
-];
-
 const BRAND_OPTIONS: BrandOption[] = [
   { id: "ALL", label: "All Brands", shortLabel: "All" },
   { id: "壽司郎", label: "壽司郎 (Sushiro)", shortLabel: "壽司郎" },
   { id: "元氣壽司", label: "元氣壽司 (Genki Sushi)", shortLabel: "元氣壽司" },
 ];
-
 
 const REGION_OPTIONS: RegionOption[] = [
   { id: "ALL", label: "All Regions", shortLabel: "All" },
@@ -110,6 +73,69 @@ const REGION_OPTIONS: RegionOption[] = [
   { id: "SG", label: "Singapore", shortLabel: "SG" },
   { id: "MY", label: "Malaysia", shortLabel: "MY" },
 ];
+
+/** Card-style config for each medium value from data.json */
+const MEDIUM_STYLE: Record<
+  string,
+  {
+    icon: React.ReactNode;
+    color: string;
+    bgColor: string;
+    borderColor: string;
+    checkColor: string;
+    description: string;
+  }
+> = {
+  Social: {
+    icon: <Globe className="h-5 w-5" />,
+    color: "text-blue-600",
+    bgColor: "bg-blue-50",
+    borderColor: "border-blue-300",
+    checkColor: "text-blue-500",
+    description: "Social media posts",
+  },
+  Facebook: {
+    icon: <MessageSquare className="h-5 w-5" />,
+    color: "text-indigo-600",
+    bgColor: "bg-indigo-50",
+    borderColor: "border-indigo-300",
+    checkColor: "text-indigo-500",
+    description: "Facebook pages & groups",
+  },
+  Forum: {
+    icon: <Hash className="h-5 w-5" />,
+    color: "text-purple-600",
+    bgColor: "bg-purple-50",
+    borderColor: "border-purple-300",
+    checkColor: "text-purple-500",
+    description: "Discussion boards & community posts",
+  },
+  Videos: {
+    icon: <Globe className="h-5 w-5" />,
+    color: "text-rose-600",
+    bgColor: "bg-rose-50",
+    borderColor: "border-rose-300",
+    checkColor: "text-rose-500",
+    description: "Video content & platforms",
+  },
+  News: {
+    icon: <Newspaper className="h-5 w-5" />,
+    color: "text-amber-600",
+    bgColor: "bg-amber-50",
+    borderColor: "border-amber-300",
+    checkColor: "text-amber-500",
+    description: "Online news articles & press",
+  },
+};
+
+const DEFAULT_MEDIUM_STYLE = {
+  icon: <Globe className="h-5 w-5" />,
+  color: "text-gray-600",
+  bgColor: "bg-gray-50",
+  borderColor: "border-gray-300",
+  checkColor: "text-gray-500",
+  description: "",
+};
 
 const TOPIC_LIST = [
   "Specific_Menu_Item",
@@ -126,17 +152,21 @@ type Topic = (typeof TOPIC_LIST)[number];
 const topicLabel = (t: string) =>
   t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+/** Extract a readable date-time string from an ISO post_timestamp like "2026-02-07T15:36:00Z" */
+const extract_time_str = (ts: string | null | undefined): string => {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return String(ts);
+  return format(d, "HH:mm:ss");
+};
+
 // ─── Main Component ─────────────────────────────────────────────────────────
 export function DownloadData() {
   // ─ Dynamic Data Loading ──────────────────────────────────────────────────
-  const [allBrands, setAllBrands] = useState<string[]>([]);
   const [allMediums, setAllMediums] = useState<string[]>([]);
 
   useEffect(() => {
-    // Extract brands and mediums from data.json
-    const brands = extractUniqueBrands(rawData as any[]);
     const mediums = extractUniqueMediums(rawData as any[]);
-    setAllBrands(brands);
     setAllMediums(mediums);
   }, []);
 
@@ -148,8 +178,15 @@ export function DownloadData() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [dateRangeWarning, setDateRangeWarning] = useState<string | null>(null);
 
-  const [selectedMediums, setSelectedMediums] = useState<string[]>(allMediums);
-  const [selectedBrands, setSelectedBrands] = useState<string[]>(["ALL"]);
+  const [selectedMediums, setSelectedMediums] = useState<string[]>([]);
+
+  // Select all mediums once loaded
+  useEffect(() => {
+    if (allMediums.length > 0 && selectedMediums.length === 0) {
+      setSelectedMediums(allMediums);
+    }
+  }, [allMediums]);
+  const [selectedBrands, setSelectedBrands] = useState<Brand[]>(["ALL"]);
   const [selectedRegions, setSelectedRegions] = useState<Region[]>(["ALL"]);
   const [selectedTopics, setSelectedTopics] = useState<Topic[]>([
     ...TOPIC_LIST,
@@ -167,20 +204,17 @@ export function DownloadData() {
     setSelectedMediums((prev) =>
       prev.includes(medium)
         ? prev.filter((m) => m !== medium)
-        : [...prev, medium]
+        : [...prev, medium],
     );
   };
 
-  const selectAllMediums = () => setSelectedMediums([...allMediums]);
-  const clearAllMediums = () => setSelectedMediums([]);
-
-  const toggleBrand = (brand: string) => {
+  const toggleBrand = (brand: Brand) => {
     setSelectedBrands((prev) => {
       if (brand === "ALL") {
         if (prev.includes("ALL")) {
           return [];
         } else {
-          return ["ALL"];
+          return BRAND_OPTIONS.map((b) => b.id);
         }
       } else {
         if (prev.includes("ALL")) {
@@ -194,7 +228,8 @@ export function DownloadData() {
     });
   };
 
-  const selectAllBrands = () => setSelectedBrands(["ALL", ...allBrands]);
+  const selectAllBrands = () =>
+    setSelectedBrands(BRAND_OPTIONS.map((b) => b.id));
   const clearAllBrands = () => setSelectedBrands([]);
 
   const toggleRegion = (region: Region) => {
@@ -269,6 +304,7 @@ export function DownloadData() {
       const filteredData = filterData(rawData as any[], {
         brands: brandsToFetch.length > 0 ? brandsToFetch : undefined,
         mediums: selectedMediums,
+        topics: selectedTopics.length > 0 ? selectedTopics : undefined,
         startTimestamp,
         endTimestamp,
       });
@@ -291,37 +327,67 @@ export function DownloadData() {
 
       // Build row objects for Excel export
       const rows = filteredData.map((post: any) => ({
-        "Unix Timestamp": getValue(post.unix_timestamp),
-        "Posted At": getValue(post.postedAt),
-        Title: getValue(post.title),
-        Message: getValue(post.post_message),
-        Topics: Array.isArray(post.topics)
-          ? post.topics.join(", ")
-          : getValue(post.topics),
-        Brands: Array.isArray(post.brands)
-          ? post.brands.join(", ")
-          : getValue(post.brands),
-        Medium: getValue(post.medium),
-        Channel: getValue(post.channel),
-        Sentiment: getValue(post.sentiment),
-        Engagement: getValue(post?.enagagement),
-        Hash: getValue(post.hash),
-        ID: getValue(post.id),
-        Link: getValue(post.link || post.post_link),
-        Source: getValue(post.source),
-        Site: getValue(post?.site),
-        "Comment Count": getValue(post?.comment_count),
-        "Reaction Count": getValue(post?.reaction_count),
-        "Share Count": getValue(post?.share_count),
-        "Like Count": getValue(post?.reaction_like),
-        "Dislike Count": getValue(post?.reaction_dislike),
-        "Love Count": getValue(post?.reaction_love),
-        "Wow Count": getValue(post?.reaction_wow),
-        "Haha Count": getValue(post?.reaction_haha),
-        "Sad Count": getValue(post?.reaction_sad),
-        "Angry Count": getValue(post?.reaction_angry),
-        Status: getValue(post?.status),
-        "Author Name": getValue(post?.author_name),
+        medium: getValue(post.medium),
+        site: getValue(post.site),
+        time: extract_time_str(post["post_timestamp"]),
+        post_timestamp: getValue(post["post_timestamp"]),
+        title: getValue(post["title"]),
+        post_message: getValue(post["post_message"]),
+        link: getValue(post["post_link"]),
+        enagagement: getValue(post["enagagement"]),
+        reaction_angry: getValue(post["reaction_angry"]),
+        reaction_haha: getValue(post["reaction_haha"]),
+        reaction_like: getValue(post["reaction_like"]),
+        reaction_love: getValue(post["reaction_love"]),
+        reaction_sad: getValue(post["reaction_sad"]),
+        reaction_wow: getValue(post["reaction_wow"]),
+        // menu_items_ingredients_origin: getValue(
+        //   post["menu_items_ingredients_origin"],
+        // ),
+        // promotions_campaigns_offers: getValue(
+        //   post["promotions_campaigns_offers"],
+        // ),
+        // branch_locations: getValue(post["branch_locations"]),
+        brand_names_subbrands: getValue(post["brand_names_subbrands"]),
+        // brand_slogans: getValue(post["brand_slogans"]),
+        // seasonal_limited_offers: getValue(post["seasonal_limited_offers"]),
+        // food_categories: getValue(post["food_categories"]),
+        // dining_experience: getValue(post["dining_experience"]),
+        // brand_crossover: getValue(post["brand_crossover"]),
+        topics: getValue(post["topics"]),
+        sentiment: getValue(post["sentiment"]),
+        hash: getValue(post["hash"]),
+        // "Unix Timestamp": getValue(post.unix_timestamp),
+        // "Posted At": getValue(post.postedAt),
+        // Title: getValue(post.title),
+        // Message: getValue(post.post_message),
+        // Topics: Array.isArray(post.topics)
+        //   ? post.topics.join(", ")
+        //   : getValue(post.topics),
+        // Brands: Array.isArray(post.brands)
+        //   ? post.brands.join(", ")
+        //   : getValue(post.brands),
+        // Medium: getValue(post.medium),
+        // Channel: getValue(post.channel),
+        // Sentiment: getValue(post.sentiment),
+        // Engagement: getValue(post?.enagagement),
+        // Hash: getValue(post.hash),
+        // ID: getValue(post.id),
+        // Link: getValue(post.link || post.post_link),
+        // Source: getValue(post.source),
+        // Site: getValue(post?.site),
+        // "Comment Count": getValue(post?.comment_count),
+        // "Reaction Count": getValue(post?.reaction_count),
+        // "Share Count": getValue(post?.share_count),
+        // "Like Count": getValue(post?.reaction_like),
+        // "Dislike Count": getValue(post?.reaction_dislike),
+        // "Love Count": getValue(post?.reaction_love),
+        // "Wow Count": getValue(post?.reaction_wow),
+        // "Haha Count": getValue(post?.reaction_haha),
+        // "Sad Count": getValue(post?.reaction_sad),
+        // "Angry Count": getValue(post?.reaction_angry),
+        // Status: getValue(post?.status),
+        // "Author Name": getValue(post?.author_name),
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -354,9 +420,7 @@ export function DownloadData() {
         ["Timestamp Range", `${startTimestamp} - ${endTimestamp}`],
         [
           "Brands",
-          brandsToFetch.length > 0
-            ? brandsToFetch.join(", ")
-            : "All Brands",
+          brandsToFetch.length > 0 ? brandsToFetch.join(", ") : "All Brands",
         ],
         ["Mediums", selectedMediums.join(", ")],
         [
@@ -365,7 +429,9 @@ export function DownloadData() {
             ? "All Regions"
             : selectedRegions
                 .filter((r) => r !== "ALL")
-                .map((r) => REGION_OPTIONS.find((opt) => opt.id === r)?.label ?? r)
+                .map(
+                  (r) => REGION_OPTIONS.find((opt) => opt.id === r)?.label ?? r,
+                )
                 .join(", "),
         ],
         [
@@ -379,11 +445,12 @@ export function DownloadData() {
       XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
 
       // Write to ArrayBuffer and trigger download
-      const brandLabel = brandsToFetch.length === 0
-        ? "All-Brands"
-        : brandsToFetch.length > 2
-          ? "Multi-Brands"
-          : brandsToFetch.join("-");
+      const brandLabel =
+        brandsToFetch.length === 0
+          ? "All-Brands"
+          : brandsToFetch.length > 2
+            ? "Multi-Brands"
+            : brandsToFetch.join("-");
       const mediumLabel = selectedMediums.join("-");
       const dateLabel = format(new Date(), "yyyyMMdd");
       const filename = `${brandLabel}_${mediumLabel}_${dateLabel}.xlsx`;
@@ -558,78 +625,81 @@ export function DownloadData() {
               </p>
             </div>
 
-            {/* ── Channel Selection ────────────────────────────────── */}
+            {/* ── Medium Selection (card-style) ────────────────── */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-[#1E3A8A]" />
-                  渠道
+                  <Newspaper className="h-4 w-4 text-[#1E3A8A]" />
+                  收集渠道
                   <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                    {selectedChannels.length}/{CHANNEL_OPTIONS.length} 已選擇
+                    {selectedMediums.length}/{allMediums.length} 已選擇
                   </span>
                 </Label>
                 <div className="flex gap-2 text-xs">
                   <button
-                    onClick={selectAllChannels}
+                    onClick={() => setSelectedMediums([...allMediums])}
                     className="text-[#1E3A8A] hover:underline font-medium"
                   >
                     全選
                   </button>
                   <span className="text-gray-300">|</span>
                   <button
-                    onClick={clearAllChannels}
+                    onClick={() => setSelectedMediums([])}
                     className="text-gray-400 hover:text-gray-600 hover:underline"
                   >
                     清除
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                {CHANNEL_OPTIONS.map((channel) => {
-                  const isSelected = selectedChannels.includes(channel.id);
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {allMediums.map((medium) => {
+                  const style = MEDIUM_STYLE[medium] ?? DEFAULT_MEDIUM_STYLE;
+                  const isSelected = selectedMediums.includes(medium);
                   return (
                     <button
-                      key={channel.id}
-                      onClick={() => toggleChannel(channel.id)}
+                      key={medium}
+                      onClick={() => toggleMedium(medium)}
                       className={cn(
-                        "group relative flex flex-col items-start gap-2 rounded-xl border-2 p-4 text-left transition-all duration-200 hover:shadow-md",
+                        "relative flex flex-col items-start gap-2 rounded-xl border-2 p-4 text-left transition-all duration-200",
                         isSelected
-                          ? `${channel.bgColor} ${channel.borderColor} shadow-sm`
-                          : "border-gray-100 bg-white hover:border-gray-200",
+                          ? `${style.bgColor} ${style.borderColor} shadow-md`
+                          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50",
                       )}
                     >
-                      {/* Check indicator */}
-                      <div className="absolute right-3 top-3">
+                      {/* Icon + check */}
+                      <div className="flex w-full items-start justify-between">
+                        <div
+                          className={cn(
+                            "flex h-10 w-10 items-center justify-center rounded-lg",
+                            isSelected ? style.bgColor : "bg-gray-100",
+                            isSelected ? style.color : "text-gray-400",
+                          )}
+                        >
+                          {style.icon}
+                        </div>
                         {isSelected ? (
                           <CheckSquare
-                            className={cn("h-4 w-4", channel.color)}
+                            className={cn("h-5 w-5", style.checkColor)}
                           />
                         ) : (
-                          <Square className="h-4 w-4 text-gray-300 group-hover:text-gray-400" />
+                          <Square className="h-5 w-5 text-gray-300" />
                         )}
                       </div>
-                      <div
-                        className={cn(
-                          "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-                          isSelected
-                            ? `${channel.bgColor} ${channel.color}`
-                            : "bg-gray-100 text-gray-400 group-hover:bg-gray-200",
-                        )}
-                      >
-                        {channel.icon}
-                      </div>
+                      {/* Label + description */}
                       <div>
                         <p
                           className={cn(
                             "text-sm font-semibold",
-                            isSelected ? "text-gray-800" : "text-gray-600",
+                            isSelected ? "text-gray-900" : "text-gray-700",
                           )}
                         >
-                          {channel.label}
+                          {medium}
                         </p>
-                        <p className="text-xs text-gray-400 mt-0.5 leading-tight">
-                          {channel.description}
-                        </p>
+                        {style.description && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {style.description}
+                          </p>
+                        )}
                       </div>
                     </button>
                   );
@@ -784,7 +854,7 @@ export function DownloadData() {
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <Hash className="h-4 w-4 text-[#1E3A8A]" />
-                  AI 主題標籤
+                  主題標籤
                   <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                     {selectedTopics.length === 0
                       ? "全部 (無篩選)"
@@ -792,6 +862,13 @@ export function DownloadData() {
                   </span>
                 </Label>
                 <div className="flex gap-2 text-xs">
+                  <button
+                    onClick={selectAllTopics}
+                    className="text-[#1E3A8A] hover:underline font-medium"
+                  >
+                    全選
+                  </button>
+                  <span className="text-gray-300">|</span>
                   <button
                     onClick={clearAllTopics}
                     className="text-gray-400 hover:text-gray-600 hover:underline"
@@ -817,8 +894,7 @@ export function DownloadData() {
                   type="text"
                   value={topicSearch}
                   onChange={(e) => setTopicSearch(e.target.value)}
-                  placeholder="
-搜尋主題..."
+                  placeholder="搜尋主題..."
                   className="w-full rounded-lg border border-gray-200 bg-white pl-8 pr-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-[#1E3A8A] focus:outline-none focus:ring-1 focus:ring-[#1E3A8A]/30"
                 />
               </div>
@@ -826,39 +902,6 @@ export function DownloadData() {
               {/* Topic tag cloud */}
               <div className="max-h-52 overflow-y-auto rounded-xl border border-gray-100 bg-gray-50/60 p-3">
                 <div className="flex flex-wrap gap-2">
-                  {/* All Topics Button */}
-                  <button
-                    onClick={() =>
-                      selectedTopics.length === TOPIC_LIST.length
-                        ? clearAllTopics()
-                        : selectAllTopics()
-                    }
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all duration-150",
-                      selectedTopics.length === TOPIC_LIST.length
-                        ? "border-[#1E3A8A] bg-gradient-to-r from-[#1E3A8A]/10 to-[#C41E3A]/10 text-[#1E3A8A] shadow-sm"
-                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700",
-                    )}
-                  >
-                    {selectedTopics.length === TOPIC_LIST.length && (
-                      <svg
-                        className="h-3 w-3 text-[#1E3A8A]"
-                        viewBox="0 0 12 12"
-                        fill="currentColor"
-                      >
-                        <path
-                          d="M10 3L5 8.5 2 5.5"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                    全部
-                  </button>
-
                   {TOPIC_LIST.filter(
                     (t) =>
                       topicSearch === "" ||
@@ -957,15 +1000,10 @@ export function DownloadData() {
                   </span>
                 </p>
                 <p>
-                  通路：{" "}
+                  渠道：{" "}
                   <span className="font-medium text-gray-600">
-                    {selectedChannels.length > 0
-                      ? selectedChannels
-                          .map(
-                            (c) =>
-                              CHANNEL_OPTIONS.find((o) => o.id === c)?.label,
-                          )
-                          .join(", ")
+                    {selectedMediums.length > 0
+                      ? selectedMediums.join(", ")
                       : "None selected"}
                   </span>
                 </p>
@@ -992,7 +1030,7 @@ export function DownloadData() {
               </div>
               <Button
                 onClick={handleDownload}
-                disabled={isDownloading || selectedChannels.length === 0}
+                disabled={isDownloading || selectedMediums.length === 0}
                 className="h-11 px-8 bg-gradient-to-r from-[#C41E3A] to-[#1E3A8A] text-white font-semibold rounded-xl hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isDownloading ? (

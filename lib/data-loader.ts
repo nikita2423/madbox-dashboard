@@ -42,10 +42,7 @@ export function extractUniqueMediums(data: DataItem[]): string[] {
 /**
  * Filter data by brands
  */
-export function filterByBrands(
-  data: DataItem[],
-  brands: string[]
-): DataItem[] {
+export function filterByBrands(data: DataItem[], brands: string[]): DataItem[] {
   if (brands.length === 0) return data;
   return data.filter((item) => {
     if (!item.brands || !Array.isArray(item.brands)) return false;
@@ -58,7 +55,7 @@ export function filterByBrands(
  */
 export function filterByMedium(
   data: DataItem[],
-  mediums: string[]
+  mediums: string[],
 ): DataItem[] {
   if (mediums.length === 0) return data;
   return data.filter((item) => mediums.includes(item.medium || ""));
@@ -70,12 +67,40 @@ export function filterByMedium(
 export function filterByDateRange(
   data: DataItem[],
   startTimestamp: number,
-  endTimestamp: number
+  endTimestamp: number,
 ): DataItem[] {
   return data.filter((item) => {
     const timestamp = item.unix_timestamp;
     if (typeof timestamp !== "number") return false;
     return timestamp >= startTimestamp && timestamp <= endTimestamp;
+  });
+}
+
+/**
+ * Extract unique topics from data
+ */
+export function extractUniqueTopics(data: DataItem[]): string[] {
+  const topics = new Set<string>();
+  data.forEach((item) => {
+    if (item.topics && Array.isArray(item.topics)) {
+      item.topics.forEach((topic) => {
+        if (topic && typeof topic === "string") {
+          topics.add(topic);
+        }
+      });
+    }
+  });
+  return Array.from(topics).sort();
+}
+
+/**
+ * Filter data by topics
+ */
+export function filterByTopics(data: DataItem[], topics: string[]): DataItem[] {
+  if (topics.length === 0) return data;
+  return data.filter((item) => {
+    if (!item.topics || !Array.isArray(item.topics)) return false;
+    return topics.some((topic) => item.topics?.includes(topic));
   });
 }
 
@@ -87,9 +112,10 @@ export function filterData(
   options: {
     brands?: string[];
     mediums?: string[];
+    topics?: string[];
     startTimestamp?: number;
     endTimestamp?: number;
-  }
+  },
 ): DataItem[] {
   let filtered = data;
 
@@ -101,6 +127,10 @@ export function filterData(
     filtered = filterByMedium(filtered, options.mediums);
   }
 
+  if (options.topics && options.topics.length > 0) {
+    filtered = filterByTopics(filtered, options.topics);
+  }
+
   if (
     options.startTimestamp !== undefined &&
     options.endTimestamp !== undefined
@@ -108,7 +138,7 @@ export function filterData(
     filtered = filterByDateRange(
       filtered,
       options.startTimestamp,
-      options.endTimestamp
+      options.endTimestamp,
     );
   }
 
